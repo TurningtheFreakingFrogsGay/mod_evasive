@@ -51,7 +51,7 @@ module AP_MODULE_DECLARE_DATA evasive24_module;
 #define DEFAULT_PAGE_INTERVAL   1       // Default 1 Second page interval
 #define DEFAULT_SITE_INTERVAL   1       // Default 1 Second site interval
 #define DEFAULT_BLOCKING_PERIOD 10      // Default for Detected IPs; blocked for 10 seconds
-#define DEFAULT_LOG_DIR		"/tmp"  // Default temp directory
+#define DEFAULT_LOG_DIR		    "/tmp"  // Default temp directory
 
 /* END DoS Evasive Maneuvers Definitions */
 
@@ -130,7 +130,7 @@ static const char *whitelist(cmd_parms *cmd, void *dconfig, const char *ip)
 static int access_checker(request_rec *r)
 {
     int ret = OK;
-    const char * client_ip = r->useragent_ip;
+    const char * client_ip = apr_table_get(r->headers_in, "X-Forwarded-For") ?: r->useragent_ip;
 
     /* BEGIN DoS Evasive Maneuvers Code */
 
