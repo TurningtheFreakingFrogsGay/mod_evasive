@@ -1,25 +1,3 @@
-/*
-mod_evasive for Apache 2
-Copyright (c) by Jonathan A. Zdziarski
-
-LICENSE
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
-
-*/
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -148,8 +126,8 @@ static int access_checker(request_rec *r)
 
       if (n != NULL && t-n->timestamp<blocking_period) {
 
-        /* If the IP is on "hold", make it wait longer in 403 land */
-        ret = HTTP_FORBIDDEN;
+        /* If the IP is on "hold", make it wait longer in 429 land */
+        ret = HTTP_TOO_MANY_REQUESTS;
         n->timestamp = time(NULL);
 
       /* Not on hold, check hit stats */
@@ -160,9 +138,9 @@ static int access_checker(request_rec *r)
         n = ntt_find(hit_list, hash_key);
         if (n != NULL) {
 
-          /* If URI is being hit too much, add to "hold" list and 403 */
+          /* If URI is being hit too much, add to "hold" list and 429 */
           if (t-n->timestamp<page_interval && n->count>=page_count) {
-            ret = HTTP_FORBIDDEN;
+            ret = HTTP_TOO_MANY_REQUESTS;
             ntt_insert(hit_list, client_ip, time(NULL));
           } else {
 
@@ -182,9 +160,9 @@ static int access_checker(request_rec *r)
         n = ntt_find(hit_list, hash_key);
         if (n != NULL) {
 
-          /* If site is being hit too much, add to "hold" list and 403 */
+          /* If site is being hit too much, add to "hold" list and 429 */
           if (t-n->timestamp<site_interval && n->count>=site_count) {
-            ret = HTTP_FORBIDDEN;
+            ret = HTTP_TOO_MANY_REQUESTS;
             ntt_insert(hit_list, client_ip, time(NULL));
           } else {
 
@@ -201,7 +179,7 @@ static int access_checker(request_rec *r)
       }
 
       /* Perform email notification and system functions */
-      if (ret == HTTP_FORBIDDEN) {
+      if (ret == HTTP_TOO_MANY_REQUESTS) {
         char filename[1024];
         struct stat s;
         FILE *file;
@@ -236,13 +214,13 @@ static int access_checker(request_rec *r)
 
         } /* if (temp file does not exist) */
 
-      } /* if (ret == HTTP_FORBIDDEN) */
+      } /* if (ret == HTTP_TOO_MANY_REQUESTS) */
 
     } /* if (r->prev == NULL && r->main == NULL && hit_list != NULL) */
 
     /* END DoS Evasive Maneuvers Code */
 
-    if (ret == HTTP_FORBIDDEN
+    if (ret == HTTP_TOO_MANY_REQUESTS
 	&& (ap_satisfies(r) != SATISFY_ANY || !ap_some_auth_required(r))) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
             "client denied by server configuration: %s",
