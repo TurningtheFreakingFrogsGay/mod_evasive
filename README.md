@@ -1,4 +1,4 @@
-# Apache Evasive Module For Apache 2.4
+# Evasive Module For Apache 2.4
 Made by Jonathan Zdziarski <jonathan@nuclearelephant.com>  
 Edited by Alexandre Jardin <info@ajardin.fr>
 

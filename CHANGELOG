@@ -1,3 +1,11 @@
+Version 1.11.0
+--------------
+[20180417] ajardin: Update CHANGELOG
+[20180417] ajardin: Update README
+[20180417] ajardin: Drop support of previous Apache versions
+[20180414] ajardin: Replace HTTP_FORBIDDEN by HTTP_TOO_MANY_REQUESTS
+[20180410] ajardin: Add the possibility to use XFF HTTP request header
+[20180410] ajardin: Add support for Apache 2.4
 
 Version 1.10.1
 --------------
