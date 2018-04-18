@@ -100,7 +100,6 @@ static int access_checker(request_rec *r) {
     const char *client_ip = apr_table_get(r->headers_in, "X-Forwarded-For") ?: r->useragent_ip;
 
     if (r->prev == NULL && r->main == NULL && hit_list != NULL) {
-        char hash_key[2048];
         struct ntt_node *n;
         time_t t = time(NULL);
 
@@ -120,8 +119,8 @@ static int access_checker(request_rec *r) {
 
             /* Not on hold, check hit stats */
         } else {
-
             /* Has URI been hit too much? */
+            char hash_key[2048];
             snprintf(hash_key, 2048, "%s_%s", client_ip, r->uri);
             n = ntt_find(hit_list, hash_key);
             if (n != NULL) {
@@ -170,11 +169,12 @@ static int access_checker(request_rec *r) {
         if (ret == HTTP_TOO_MANY_REQUESTS) {
             char filename[1024];
             struct stat s;
-            FILE *file;
 
             snprintf(filename, sizeof(filename), "%s/dos-%s", log_dir != NULL ? log_dir : DEFAULT_LOG_DIR, client_ip);
             if (stat(filename, &s)) {
+                FILE *file;
                 file = fopen(filename, "w");
+
                 if (file != NULL) {
                     fprintf(file, "%ld\n", getpid());
                     fclose(file);
@@ -390,7 +390,7 @@ struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) 
     /* Create a new node */
     new_node = ntt_node_create(key);
     new_node->timestamp = timestamp;
-    new_node->timestamp = 0;
+    new_node->count = 0;
 
     ntt->items++;
 
@@ -479,7 +479,6 @@ struct ntt_node *c_ntt_first(struct ntt *ntt, struct ntt_c *c) {
 
 /* Point cursor to next iteration in tree */
 struct ntt_node *c_ntt_next(struct ntt *ntt, struct ntt_c *c) {
-    long index;
     struct ntt_node *node = c->iter_next;
 
     if (ntt == NULL) {
@@ -495,6 +494,7 @@ struct ntt_node *c_ntt_next(struct ntt *ntt, struct ntt_c *c) {
 
     if (!node) {
         while (c->iter_index < ntt->size) {
+            long index;
             index = c->iter_index++;
 
             if (ntt->tbl[index]) {
