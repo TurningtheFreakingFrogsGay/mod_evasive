@@ -19,7 +19,6 @@
 
 module AP_MODULE_DECLARE_DATA evasive_module;
 
-/* BEGIN DoS Evasive Maneuvers Definitions */
 
 #define MAILER	"/bin/mail %s"
 #define LOG( A, ... ) { openlog("mod_evasive", LOG_PID, LOG_DAEMON); syslog( A, __VA_ARGS__ ); closelog(); }
@@ -32,11 +31,10 @@ module AP_MODULE_DECLARE_DATA evasive_module;
 #define DEFAULT_BLOCKING_PERIOD 10      // Default for Detected IPs; blocked for 10 seconds
 #define DEFAULT_LOG_DIR		    "/tmp"  // Default temp directory
 
-/* END DoS Evasive Maneuvers Definitions */
 
-/* BEGIN NTT (Named Timestamp Tree) Headers */
-
-enum { ntt_num_primes = 28 };
+enum {
+    ntt_num_primes = 28
+};
 
 /* ntt root tree */
 struct ntt {
@@ -55,8 +53,8 @@ struct ntt_node {
 
 /* ntt cursor */
 struct ntt_c {
-  long iter_index;
-  struct ntt_node *iter_next;
+    long iter_index;
+    struct ntt_node *iter_next;
 };
 
 struct ntt *ntt_create(long size);
@@ -68,10 +66,6 @@ long ntt_hashcode(struct ntt *ntt, const char *key);
 struct ntt_node *c_ntt_first(struct ntt *ntt, struct ntt_c *c);
 struct ntt_node *c_ntt_next(struct ntt *ntt, struct ntt_c *c);
 
-/* END NTT (Named Timestamp Tree) Headers */
-
-
-/* BEGIN DoS Evasive Maneuvers Globals */
 
 struct ntt *hit_list;	// Our dynamic hash table
 
@@ -87,200 +81,192 @@ static char *system_command = NULL;
 static const char *whitelist(cmd_parms *cmd, void *dconfig, const char *ip);
 int is_whitelisted(const char *ip);
 
-/* END DoS Evasive Maneuvers Globals */
 
-static void * create_hit_list(apr_pool_t *p, server_rec *s)
-{
+static void *create_hit_list(apr_pool_t *p, server_rec *s) {
     /* Create a new hit list for this listener */
     hit_list = ntt_create(hash_table_size);
 }
 
-static const char *whitelist(cmd_parms *cmd, void *dconfig, const char *ip)
-{
-  char entry[128];
-  snprintf(entry, sizeof(entry), "WHITELIST_%s", ip);
-  ntt_insert(hit_list, entry, time(NULL));
+static const char *whitelist(cmd_parms *cmd, void *dconfig, const char *ip) {
+    char entry[128];
+    snprintf(entry, sizeof(entry), "WHITELIST_%s", ip);
+    ntt_insert(hit_list, entry, time(NULL));
 
-  return NULL;
+    return NULL;
 }
 
-
-static int access_checker(request_rec *r)
-{
+static int access_checker(request_rec *r) {
     int ret = OK;
-    const char * client_ip = apr_table_get(r->headers_in, "X-Forwarded-For") ?: r->useragent_ip;
-
-    /* BEGIN DoS Evasive Maneuvers Code */
+    const char *client_ip = apr_table_get(r->headers_in, "X-Forwarded-For") ?: r->useragent_ip;
 
     if (r->prev == NULL && r->main == NULL && hit_list != NULL) {
-      char hash_key[2048];
-      struct ntt_node *n;
-      time_t t = time(NULL);
+        char hash_key[2048];
+        struct ntt_node *n;
+        time_t t = time(NULL);
 
-      /* Check whitelist */
-      if (is_whitelisted(client_ip))
-        return OK;
-
-      /* First see if the IP itself is on "hold" */
-      n = ntt_find(hit_list, client_ip);
-
-      if (n != NULL && t-n->timestamp<blocking_period) {
-
-        /* If the IP is on "hold", make it wait longer in 429 land */
-        ret = HTTP_TOO_MANY_REQUESTS;
-        n->timestamp = time(NULL);
-
-      /* Not on hold, check hit stats */
-      } else {
-
-        /* Has URI been hit too much? */
-        snprintf(hash_key, 2048, "%s_%s", client_ip, r->uri);
-        n = ntt_find(hit_list, hash_key);
-        if (n != NULL) {
-
-          /* If URI is being hit too much, add to "hold" list and 429 */
-          if (t-n->timestamp<page_interval && n->count>=page_count) {
-            ret = HTTP_TOO_MANY_REQUESTS;
-            ntt_insert(hit_list, client_ip, time(NULL));
-          } else {
-
-            /* Reset our hit count list as necessary */
-            if (t-n->timestamp>=page_interval) {
-              n->count=0;
-            }
-          }
-          n->timestamp = t;
-          n->count++;
-        } else {
-          ntt_insert(hit_list, hash_key, t);
+        /* Check whitelist */
+        if (is_whitelisted(client_ip)) {
+            return OK;
         }
 
-        /* Has site been hit too much? */
-        snprintf(hash_key, 2048, "%s_SITE", client_ip);
-        n = ntt_find(hit_list, hash_key);
-        if (n != NULL) {
+        /* First see if the IP itself is on "hold" */
+        n = ntt_find(hit_list, client_ip);
 
-          /* If site is being hit too much, add to "hold" list and 429 */
-          if (t-n->timestamp<site_interval && n->count>=site_count) {
+        if (n != NULL && t - n->timestamp < blocking_period) {
+
+            /* If the IP is on "hold", make it wait longer in 429 land */
             ret = HTTP_TOO_MANY_REQUESTS;
-            ntt_insert(hit_list, client_ip, time(NULL));
-          } else {
+            n->timestamp = time(NULL);
 
-            /* Reset our hit count list as necessary */
-            if (t-n->timestamp>=site_interval) {
-              n->count=0;
-            }
-          }
-          n->timestamp = t;
-          n->count++;
+            /* Not on hold, check hit stats */
         } else {
-          ntt_insert(hit_list, hash_key, t);
+
+            /* Has URI been hit too much? */
+            snprintf(hash_key, 2048, "%s_%s", client_ip, r->uri);
+            n = ntt_find(hit_list, hash_key);
+            if (n != NULL) {
+
+                /* If URI is being hit too much, add to "hold" list and 429 */
+                if (t - n->timestamp < page_interval && n->count >= page_count) {
+                    ret = HTTP_TOO_MANY_REQUESTS;
+                    ntt_insert(hit_list, client_ip, time(NULL));
+                } else {
+
+                    /* Reset our hit count list as necessary */
+                    if (t - n->timestamp >= page_interval) {
+                        n->count = 0;
+                    }
+                }
+                n->timestamp = t;
+                n->count++;
+            } else {
+                ntt_insert(hit_list, hash_key, t);
+            }
+
+            /* Has site been hit too much? */
+            snprintf(hash_key, 2048, "%s_SITE", client_ip);
+            n = ntt_find(hit_list, hash_key);
+            if (n != NULL) {
+
+                /* If site is being hit too much, add to "hold" list and 429 */
+                if (t - n->timestamp < site_interval && n->count >= site_count) {
+                    ret = HTTP_TOO_MANY_REQUESTS;
+                    ntt_insert(hit_list, client_ip, time(NULL));
+                } else {
+
+                    /* Reset our hit count list as necessary */
+                    if (t - n->timestamp >= site_interval) {
+                        n->count = 0;
+                    }
+                }
+                n->timestamp = t;
+                n->count++;
+            } else {
+                ntt_insert(hit_list, hash_key, t);
+            }
         }
-      }
 
-      /* Perform email notification and system functions */
-      if (ret == HTTP_TOO_MANY_REQUESTS) {
-        char filename[1024];
-        struct stat s;
-        FILE *file;
+        /* Perform email notification and system functions */
+        if (ret == HTTP_TOO_MANY_REQUESTS) {
+            char filename[1024];
+            struct stat s;
+            FILE *file;
 
-        snprintf(filename, sizeof(filename), "%s/dos-%s", log_dir != NULL ? log_dir : DEFAULT_LOG_DIR, client_ip);
-        if (stat(filename, &s)) {
-          file = fopen(filename, "w");
-          if (file != NULL) {
-            fprintf(file, "%ld\n", getpid());
-            fclose(file);
+            snprintf(filename, sizeof(filename), "%s/dos-%s", log_dir != NULL ? log_dir : DEFAULT_LOG_DIR, client_ip);
+            if (stat(filename, &s)) {
+                file = fopen(filename, "w");
+                if (file != NULL) {
+                    fprintf(file, "%ld\n", getpid());
+                    fclose(file);
 
-            LOG(LOG_ALERT, "Blacklisting address %s: possible DoS attack.", client_ip);
-            if (email_notify != NULL) {
-              snprintf(filename, sizeof(filename), MAILER, email_notify);
-              file = popen(filename, "w");
-              if (file != NULL) {
-                fprintf(file, "To: %s\n", email_notify);
-                fprintf(file, "Subject: HTTP BLACKLIST %s\n\n", client_ip);
-                fprintf(file, "mod_evasive HTTP Blacklisted %s\n", client_ip);
-                pclose(file);
-              }
-            }
+                    LOG(LOG_ALERT, "Blacklisting address %s: possible DoS attack.", client_ip);
+                    if (email_notify != NULL) {
+                        snprintf(filename, sizeof(filename), MAILER, email_notify);
+                        file = popen(filename, "w");
+                        if (file != NULL) {
+                            fprintf(file, "To: %s\n", email_notify);
+                            fprintf(file, "Subject: HTTP BLACKLIST %s\n\n", client_ip);
+                            fprintf(file, "mod_evasive HTTP Blacklisted %s\n", client_ip);
+                            pclose(file);
+                        }
+                    }
 
-            if (system_command != NULL) {
-              snprintf(filename, sizeof(filename), system_command, client_ip);
-              system(filename);
-            }
+                    if (system_command != NULL) {
+                        snprintf(filename, sizeof(filename), system_command, client_ip);
+                        system(filename);
+                    }
 
-          } else {
-            LOG(LOG_ALERT, "Couldn't open logfile %s: %s",filename, strerror(errno));
-      }
+                } else {
+                    LOG(LOG_ALERT, "Couldn't open logfile %s: %s", filename, strerror(errno));
+                }
 
-        } /* if (temp file does not exist) */
+            } /* if (temp file does not exist) */
 
-      } /* if (ret == HTTP_TOO_MANY_REQUESTS) */
+        } /* if (ret == HTTP_TOO_MANY_REQUESTS) */
 
     } /* if (r->prev == NULL && r->main == NULL && hit_list != NULL) */
 
-    /* END DoS Evasive Maneuvers Code */
-
-    if (ret == HTTP_TOO_MANY_REQUESTS
-    && (ap_satisfies(r) != SATISFY_ANY || !ap_some_auth_required(r))) {
-        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
-            "client denied by server configuration: %s",
-            r->filename);
+    if (ret == HTTP_TOO_MANY_REQUESTS && (ap_satisfies(r) != SATISFY_ANY || !ap_some_auth_required(r))) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "client denied by server configuration: %s", r->filename);
     }
 
     return ret;
 }
 
 int is_whitelisted(const char *ip) {
-  char hashkey[128];
-  char octet[4][4];
-  char *dip;
-  char *oct;
-  int i = 0;
+    char hashkey[128];
+    char octet[4][4];
+    char *dip;
+    char *oct;
+    int i = 0;
 
-  memset(octet, 0, 16);
-  dip = strdup(ip);
-  if (dip == NULL)
+    memset(octet, 0, 16);
+    dip = strdup(ip);
+    if (dip == NULL) {
+        return 0;
+    }
+
+    oct = strtok(dip, ".");
+    while (oct != NULL && i < 4) {
+        if (strlen(oct) <= 3)
+            strcpy(octet[i], oct);
+        i++;
+        oct = strtok(NULL, ".");
+    }
+    free(dip);
+
+    /* Exact Match */
+    snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s", ip);
+    if (ntt_find(hit_list, hashkey) != NULL) {
+        return 1;
+    }
+
+    /* IPv4 Wildcards */
+    snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s.*.*.*", octet[0]);
+    if (ntt_find(hit_list, hashkey) != NULL) {
+        return 1;
+    }
+
+    snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s.%s.*.*", octet[0], octet[1]);
+    if (ntt_find(hit_list, hashkey) != NULL) {
+        return 1;
+    }
+
+    snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s.%s.%s.*", octet[0], octet[1], octet[2]);
+    if (ntt_find(hit_list, hashkey) != NULL) {
+        return 1;
+    }
+
+    /* No match */
     return 0;
-
-  oct = strtok(dip, ".");
-  while(oct != NULL && i<4) {
-    if (strlen(oct)<=3)
-      strcpy(octet[i], oct);
-    i++;
-    oct = strtok(NULL, ".");
-  }
-  free(dip);
-
-  /* Exact Match */
-  snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s", ip);
-  if (ntt_find(hit_list, hashkey)!=NULL)
-    return 1;
-
-  /* IPv4 Wildcards */
-  snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s.*.*.*", octet[0]);
-  if (ntt_find(hit_list, hashkey)!=NULL)
-    return 1;
-
-  snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s.%s.*.*", octet[0], octet[1]);
-  if (ntt_find(hit_list, hashkey)!=NULL)
-    return 1;
-
-  snprintf(hashkey, sizeof(hashkey), "WHITELIST_%s.%s.%s.*", octet[0], octet[1], octet[2]);
-  if (ntt_find(hit_list, hashkey)!=NULL)
-    return 1;
-
-  /* No match */
-  return 0;
 }
 
 static apr_status_t destroy_hit_list(void *not_used) {
-  ntt_destroy(hit_list);
-  free(email_notify);
-  free(system_command);
+    ntt_destroy(hit_list);
+    free(email_notify);
+    free(system_command);
 }
 
-
-/* BEGIN NTT (Named Timestamp Tree) Functions */
 
 static unsigned long ntt_prime_list[ntt_num_primes] =
 {
@@ -294,74 +280,82 @@ static unsigned long ntt_prime_list[ntt_num_primes] =
 
 
 /* Find the numeric position in the hash table based on key and modulus */
-
 long ntt_hashcode(struct ntt *ntt, const char *key) {
     unsigned long val = 0;
     for (; *key; ++key) val = 5 * val + *key;
-    return(val % ntt->size);
+    return (val % ntt->size);
 }
 
 /* Creates a single node in the tree */
-
 struct ntt_node *ntt_node_create(const char *key) {
     char *node_key;
-    struct ntt_node* node;
+    struct ntt_node *node;
 
     node = (struct ntt_node *) malloc(sizeof(struct ntt_node));
     if (node == NULL) {
-    return NULL;
+        return NULL;
     }
+
     if ((node_key = strdup(key)) == NULL) {
         free(node);
-    return NULL;
+        return NULL;
     }
+
     node->key = node_key;
     node->timestamp = time(NULL);
     node->next = NULL;
-    return(node);
+
+    return (node);
 }
 
 /* Tree initializer */
-
 struct ntt *ntt_create(long size) {
     long i = 0;
     struct ntt *ntt = (struct ntt *) malloc(sizeof(struct ntt));
 
-    if (ntt == NULL)
+    if (ntt == NULL) {
         return NULL;
-    while (ntt_prime_list[i] < size) { i++; }
-    ntt->size  = ntt_prime_list[i];
+    }
+
+    while (ntt_prime_list[i] < size) {
+        i++;
+    }
+
+    ntt->size = ntt_prime_list[i];
     ntt->items = 0;
-    ntt->tbl   = (struct ntt_node **) calloc(ntt->size, sizeof(struct ntt_node *));
+    ntt->tbl = (struct ntt_node **) calloc(ntt->size, sizeof(struct ntt_node *));
+
     if (ntt->tbl == NULL) {
         free(ntt);
         return NULL;
     }
-    return(ntt);
+
+    return (ntt);
 }
 
 /* Find an object in the tree */
-
 struct ntt_node *ntt_find(struct ntt *ntt, const char *key) {
     long hash_code;
     struct ntt_node *node;
 
-    if (ntt == NULL) return NULL;
+    if (ntt == NULL) {
+        return NULL;
+    }
 
     hash_code = ntt_hashcode(ntt, key);
     node = ntt->tbl[hash_code];
 
     while (node) {
         if (!strcmp(key, node->key)) {
-            return(node);
+            return (node);
         }
         node = node->next;
     }
-    return((struct ntt_node *)NULL);
+
+    return ((struct ntt_node *) NULL);
 }
 
 /* Insert a node into the tree */
-
 struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) {
     long hash_code;
     struct ntt_node *parent;
@@ -371,8 +365,8 @@ struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) 
     if (ntt == NULL) return NULL;
 
     hash_code = ntt_hashcode(ntt, key);
-    parent	= NULL;
-    node	= ntt->tbl[hash_code];
+    parent = NULL;
+    node = ntt->tbl[hash_code];
 
     while (node != NULL) {
         if (strcmp(key, node->key) == 0) {
@@ -380,15 +374,16 @@ struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) 
             node = NULL;
         }
 
-    if (new_node == NULL) {
-          parent = node;
-          node = node->next;
+        if (new_node == NULL) {
+            parent = node;
+            node = node->next;
         }
     }
 
     if (new_node != NULL) {
         new_node->timestamp = timestamp;
         new_node->count = 0;
+
         return new_node;
     }
 
@@ -401,7 +396,7 @@ struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) 
 
     /* Insert */
     if (parent) {  /* Existing parent */
-    parent->next = new_node;
+        parent->next = new_node;
         return new_node;  /* Return the locked node */
     }
 
@@ -411,7 +406,6 @@ struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) 
 }
 
 /* Tree destructor */
-
 int ntt_destroy(struct ntt *ntt) {
     struct ntt_node *node, *next;
     struct ntt_c c;
@@ -419,7 +413,7 @@ int ntt_destroy(struct ntt *ntt) {
     if (ntt == NULL) return -1;
 
     node = c_ntt_first(ntt, &c);
-    while(node != NULL) {
+    while (node != NULL) {
         next = c_ntt_next(ntt, &c);
         ntt_delete(ntt, node->key);
         node = next;
@@ -433,17 +427,18 @@ int ntt_destroy(struct ntt *ntt) {
 }
 
 /* Delete a single node in the tree */
-
 int ntt_delete(struct ntt *ntt, const char *key) {
     long hash_code;
     struct ntt_node *parent = NULL;
     struct ntt_node *node;
     struct ntt_node *del_node = NULL;
 
-    if (ntt == NULL) return -1;
+    if (ntt == NULL) {
+        return -1;
+    }
 
     hash_code = ntt_hashcode(ntt, key);
-    node        = ntt->tbl[hash_code];
+    node = ntt->tbl[hash_code];
 
     while (node != NULL) {
         if (strcmp(key, node->key) == 0) {
@@ -452,13 +447,12 @@ int ntt_delete(struct ntt *ntt, const char *key) {
         }
 
         if (del_node == NULL) {
-          parent = node;
-          node = node->next;
+            parent = node;
+            node = node->next;
         }
     }
 
     if (del_node != NULL) {
-
         if (parent) {
             parent->next = del_node->next;
         } else {
@@ -476,21 +470,21 @@ int ntt_delete(struct ntt *ntt, const char *key) {
 }
 
 /* Point cursor to first item in tree */
-
 struct ntt_node *c_ntt_first(struct ntt *ntt, struct ntt_c *c) {
-
     c->iter_index = 0;
-    c->iter_next = (struct ntt_node *)NULL;
-    return(c_ntt_next(ntt, c));
+    c->iter_next = (struct ntt_node *) NULL;
+
+    return (c_ntt_next(ntt, c));
 }
 
 /* Point cursor to next iteration in tree */
-
 struct ntt_node *c_ntt_next(struct ntt *ntt, struct ntt_c *c) {
     long index;
     struct ntt_node *node = c->iter_next;
 
-    if (ntt == NULL) return NULL;
+    if (ntt == NULL) {
+        return NULL;
+    }
 
     if (node) {
         if (node != NULL) {
@@ -499,174 +493,147 @@ struct ntt_node *c_ntt_next(struct ntt *ntt, struct ntt_c *c) {
         }
     }
 
-    if (! node) {
+    if (!node) {
         while (c->iter_index < ntt->size) {
             index = c->iter_index++;
 
             if (ntt->tbl[index]) {
                 c->iter_next = ntt->tbl[index]->next;
-                return(ntt->tbl[index]);
+                return (ntt->tbl[index]);
             }
         }
     }
-    return((struct ntt_node *)NULL);
+
+    return ((struct ntt_node *) NULL);
 }
 
-/* END NTT (Named Pointer Tree) Functions */
 
+static const char *get_hash_tbl_size(cmd_parms *cmd, void *dconfig, const char *value) {
+    long n = strtol(value, NULL, 0);
 
-/* BEGIN Configuration Functions */
+    if (n <= 0) {
+        hash_table_size = DEFAULT_HASH_TBL_SIZE;
+    } else {
+        hash_table_size = n;
+    }
 
-static const char *
-get_hash_tbl_size(cmd_parms *cmd, void *dconfig, const char *value) {
-  long n = strtol(value, NULL, 0);
-
-  if (n<=0) {
-    hash_table_size = DEFAULT_HASH_TBL_SIZE;
-  } else  {
-    hash_table_size = n;
-  }
-
-  return NULL;
+    return NULL;
 }
 
-static const char *
-get_page_count(cmd_parms *cmd, void *dconfig, const char *value) {
-  long n = strtol(value, NULL, 0);
-  if (n<=0) {
-    page_count = DEFAULT_PAGE_COUNT;
-  } else {
-    page_count = n;
-  }
+static const char *get_page_count(cmd_parms *cmd, void *dconfig, const char *value) {
+    long n = strtol(value, NULL, 0);
 
-  return NULL;
+    if (n <= 0) {
+        page_count = DEFAULT_PAGE_COUNT;
+    } else {
+        page_count = n;
+    }
+
+    return NULL;
 }
 
-static const char *
-get_site_count(cmd_parms *cmd, void *dconfig, const char *value) {
-  long n = strtol(value, NULL, 0);
-  if (n<=0) {
-    site_count = DEFAULT_SITE_COUNT;
-  } else {
-    site_count = n;
-  }
+static const char *get_site_count(cmd_parms *cmd, void *dconfig, const char *value) {
+    long n = strtol(value, NULL, 0);
 
-  return NULL;
+    if (n <= 0) {
+        site_count = DEFAULT_SITE_COUNT;
+    } else {
+        site_count = n;
+    }
+
+    return NULL;
 }
 
-static const char *
-get_page_interval(cmd_parms *cmd, void *dconfig, const char *value) {
-  long n = strtol(value, NULL, 0);
-  if (n<=0) {
-    page_interval = DEFAULT_PAGE_INTERVAL;
-  } else {
-    page_interval = n;
-  }
+static const char *get_page_interval(cmd_parms *cmd, void *dconfig, const char *value) {
+    long n = strtol(value, NULL, 0);
 
-  return NULL;
+    if (n <= 0) {
+        page_interval = DEFAULT_PAGE_INTERVAL;
+    } else {
+        page_interval = n;
+    }
+
+    return NULL;
 }
 
-static const char *
-get_site_interval(cmd_parms *cmd, void *dconfig, const char *value) {
-  long n = strtol(value, NULL, 0);
-  if (n<=0) {
-    site_interval = DEFAULT_SITE_INTERVAL;
-  } else {
-    site_interval = n;
-  }
+static const char *get_site_interval(cmd_parms *cmd, void *dconfig, const char *value) {
+    long n = strtol(value, NULL, 0);
 
-  return NULL;
+    if (n <= 0) {
+        site_interval = DEFAULT_SITE_INTERVAL;
+    } else {
+        site_interval = n;
+    }
+
+    return NULL;
 }
 
-static const char *
-get_blocking_period(cmd_parms *cmd, void *dconfig, const char *value) {
-  long n = strtol(value, NULL, 0);
-  if (n<=0) {
-    blocking_period = DEFAULT_BLOCKING_PERIOD;
-  } else {
-    blocking_period = n;
-  }
+static const char *get_blocking_period(cmd_parms *cmd, void *dconfig, const char *value) {
+    long n = strtol(value, NULL, 0);
 
-  return NULL;
+    if (n <= 0) {
+        blocking_period = DEFAULT_BLOCKING_PERIOD;
+    } else {
+        blocking_period = n;
+    }
+
+    return NULL;
 }
 
-static const char *
-get_log_dir(cmd_parms *cmd, void *dconfig, const char *value) {
-  if (value != NULL && value[0] != 0) {
-    if (log_dir != NULL)
-      free(log_dir);
-    log_dir = strdup(value);
-  }
+static const char *get_log_dir(cmd_parms *cmd, void *dconfig, const char *value) {
+    if (value != NULL && value[0] != 0) {
+        if (log_dir != NULL) {
+            free(log_dir);
+        }
+        log_dir = strdup(value);
+    }
 
-  return NULL;
+    return NULL;
 }
 
-static const char *
-get_email_notify(cmd_parms *cmd, void *dconfig, const char *value) {
-  if (value != NULL && value[0] != 0) {
-    if (email_notify != NULL)
-      free(email_notify);
-    email_notify = strdup(value);
-  }
+static const char *get_email_notify(cmd_parms *cmd, void *dconfig, const char *value) {
+    if (value != NULL && value[0] != 0) {
+        if (email_notify != NULL) {
+            free(email_notify);
+        }
+        email_notify = strdup(value);
+    }
 
-  return NULL;
+    return NULL;
 }
 
-static const char *
-get_system_command(cmd_parms *cmd, void *dconfig, const char *value) {
-  if (value != NULL && value[0] != 0) {
-    if (system_command != NULL)
-      free(system_command);
-    system_command = strdup(value);
-  }
+static const char *get_system_command(cmd_parms *cmd, void *dconfig, const char *value) {
+    if (value != NULL && value[0] != 0) {
+        if (system_command != NULL) {
+            free(system_command);
+        }
+        system_command = strdup(value);
+    }
 
-  return NULL;
+    return NULL;
 }
 
-/* END Configuration Functions */
 
-static const command_rec access_cmds[] =
-{
-    AP_INIT_TAKE1("DOSHashTableSize", get_hash_tbl_size, NULL, RSRC_CONF,
-        "Set size of hash table"),
-
-        AP_INIT_TAKE1("DOSPageCount", get_page_count, NULL, RSRC_CONF,
-        "Set maximum page hit count per interval"),
-
-        AP_INIT_TAKE1("DOSSiteCount", get_site_count, NULL, RSRC_CONF,
-        "Set maximum site hit count per interval"),
-
-        AP_INIT_TAKE1("DOSPageInterval", get_page_interval, NULL, RSRC_CONF,
-        "Set page interval"),
-
-    AP_INIT_TAKE1("DOSSiteInterval", get_site_interval, NULL, RSRC_CONF,
-        "Set site interval"),
-
-        AP_INIT_TAKE1("DOSBlockingPeriod", get_blocking_period, NULL, RSRC_CONF,
-        "Set blocking period for detected DoS IPs"),
-
-    AP_INIT_TAKE1("DOSEmailNotify", get_email_notify, NULL, RSRC_CONF,
-        "Set email notification"),
-
-    AP_INIT_TAKE1("DOSLogDir", get_log_dir, NULL, RSRC_CONF,
-        "Set log dir"),
-
-    AP_INIT_TAKE1("DOSSystemCommand", get_system_command, NULL, RSRC_CONF,
-        "Set system command on DoS"),
-
-        AP_INIT_ITERATE("DOSWhitelist", whitelist, NULL, RSRC_CONF,
-                "IP-addresses wildcards to whitelist"),
-
-    { NULL }
+static const command_rec access_cmds[] = {
+    AP_INIT_TAKE1("DOSHashTableSize", get_hash_tbl_size, NULL, RSRC_CONF, "Set size of hash table"),
+    AP_INIT_TAKE1("DOSPageCount", get_page_count, NULL, RSRC_CONF, "Set maximum page hit count per interval"),
+    AP_INIT_TAKE1("DOSSiteCount", get_site_count, NULL, RSRC_CONF, "Set maximum site hit count per interval"),
+    AP_INIT_TAKE1("DOSPageInterval", get_page_interval, NULL, RSRC_CONF, "Set page interval"),
+    AP_INIT_TAKE1("DOSSiteInterval", get_site_interval, NULL, RSRC_CONF, "Set site interval"),
+    AP_INIT_TAKE1("DOSBlockingPeriod", get_blocking_period, NULL, RSRC_CONF, "Set blocking period for detected DoS IPs"),
+    AP_INIT_TAKE1("DOSEmailNotify", get_email_notify, NULL, RSRC_CONF, "Set email notification"),
+    AP_INIT_TAKE1("DOSLogDir", get_log_dir, NULL, RSRC_CONF, "Set log dir"),
+    AP_INIT_TAKE1("DOSSystemCommand", get_system_command, NULL, RSRC_CONF, "Set system command on DoS"),
+    AP_INIT_ITERATE("DOSWhitelist", whitelist, NULL, RSRC_CONF, "IP-addresses wildcards to whitelist"),
+    {NULL}
 };
 
 static void register_hooks(apr_pool_t *p) {
-  ap_hook_access_checker(access_checker, NULL, NULL, APR_HOOK_MIDDLE);
-  apr_pool_cleanup_register(p, NULL, apr_pool_cleanup_null, destroy_hit_list);
+    ap_hook_access_checker(access_checker, NULL, NULL, APR_HOOK_MIDDLE);
+    apr_pool_cleanup_register(p, NULL, apr_pool_cleanup_null, destroy_hit_list);
 };
 
-module AP_MODULE_DECLARE_DATA evasive_module =
-{
+module AP_MODULE_DECLARE_DATA evasive_module = {
     STANDARD20_MODULE_STUFF,
     NULL,
     NULL,
