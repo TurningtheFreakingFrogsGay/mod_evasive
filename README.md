@@ -55,14 +55,14 @@ infrastructure and address filtering tool in place, a heavy distributed DoS will
 
 ## How to install
 1. Extract this archive
-2. Run `$APACHE_ROOT/bin/apxs -cia mod_evasive24.c`
+2. Run `$APACHE_ROOT/bin/apxs -cia mod_evasive.c`
 3. The module will be built and installed into `$APACHE_ROOT/modules`, and loaded into your httpd.conf
 4. Restart Apache
 
 ## Configuration
 mod_evasive has default options configured, but you may also add the following block to your httpd.conf:
 ```
-<IfModule evasive24_module>
+<IfModule evasive_module>
     DOSHashTableSize    3097
     DOSPageCount        2
     DOSSiteCount        50
@@ -110,7 +110,7 @@ necessary to have a long blocking period; in the event of a DoS attack, this tim
 If this value is set, an email will be sent to the address specified whenever an IP address becomes blacklisted. A
 locking mechanism using /tmp prevents continuous emails from being sent.
 
-NOTE: Be sure MAILER is set correctly in mod_evasive24.c. 
+NOTE: Be sure MAILER is set correctly in mod_evasive.c. 
 The default is `/bin/mail -t %s` where %s is used to denote the destination email address set in the configuration. If
 you are running on linux or some other operating system with a different type of mailer, you'll need to change this.
 

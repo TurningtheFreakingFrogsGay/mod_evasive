@@ -1,4 +1,5 @@
 #include <sys/types.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <netinet/in.h>
@@ -16,12 +17,12 @@
 #include "http_log.h"
 #include "http_request.h"
 
-module AP_MODULE_DECLARE_DATA evasive24_module;
+module AP_MODULE_DECLARE_DATA evasive_module;
 
 /* BEGIN DoS Evasive Maneuvers Definitions */
 
 #define MAILER	"/bin/mail %s"
-#define  LOG( A, ... ) { openlog("mod_evasive", LOG_PID, LOG_DAEMON); syslog( A, __VA_ARGS__ ); closelog(); }
+#define LOG( A, ... ) { openlog("mod_evasive", LOG_PID, LOG_DAEMON); syslog( A, __VA_ARGS__ ); closelog(); }
 
 #define DEFAULT_HASH_TBL_SIZE   3097ul  // Default hash table size
 #define DEFAULT_PAGE_COUNT      2       // Default maximum page hit count per interval
@@ -91,7 +92,6 @@ int is_whitelisted(const char *ip);
 static void * create_hit_list(apr_pool_t *p, server_rec *s)
 {
     /* Create a new hit list for this listener */
-
     hit_list = ntt_create(hash_table_size);
 }
 
@@ -210,7 +210,7 @@ static int access_checker(request_rec *r)
 
           } else {
             LOG(LOG_ALERT, "Couldn't open logfile %s: %s",filename, strerror(errno));
-	  }
+      }
 
         } /* if (temp file does not exist) */
 
@@ -221,7 +221,7 @@ static int access_checker(request_rec *r)
     /* END DoS Evasive Maneuvers Code */
 
     if (ret == HTTP_TOO_MANY_REQUESTS
-	&& (ap_satisfies(r) != SATISFY_ANY || !ap_some_auth_required(r))) {
+    && (ap_satisfies(r) != SATISFY_ANY || !ap_some_auth_required(r))) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
             "client denied by server configuration: %s",
             r->filename);
@@ -309,11 +309,11 @@ struct ntt_node *ntt_node_create(const char *key) {
 
     node = (struct ntt_node *) malloc(sizeof(struct ntt_node));
     if (node == NULL) {
-	return NULL;
+    return NULL;
     }
     if ((node_key = strdup(key)) == NULL) {
         free(node);
-	return NULL;
+    return NULL;
     }
     node->key = node_key;
     node->timestamp = time(NULL);
@@ -380,7 +380,7 @@ struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) 
             node = NULL;
         }
 
-	if (new_node == NULL) {
+    if (new_node == NULL) {
           parent = node;
           node = node->next;
         }
@@ -401,7 +401,7 @@ struct ntt_node *ntt_insert(struct ntt *ntt, const char *key, time_t timestamp) 
 
     /* Insert */
     if (parent) {  /* Existing parent */
-	parent->next = new_node;
+    parent->next = new_node;
         return new_node;  /* Return the locked node */
     }
 
@@ -627,37 +627,37 @@ get_system_command(cmd_parms *cmd, void *dconfig, const char *value) {
 
 static const command_rec access_cmds[] =
 {
-	AP_INIT_TAKE1("DOSHashTableSize", get_hash_tbl_size, NULL, RSRC_CONF,
-		"Set size of hash table"),
+    AP_INIT_TAKE1("DOSHashTableSize", get_hash_tbl_size, NULL, RSRC_CONF,
+        "Set size of hash table"),
 
         AP_INIT_TAKE1("DOSPageCount", get_page_count, NULL, RSRC_CONF,
-		"Set maximum page hit count per interval"),
+        "Set maximum page hit count per interval"),
 
         AP_INIT_TAKE1("DOSSiteCount", get_site_count, NULL, RSRC_CONF,
-		"Set maximum site hit count per interval"),
+        "Set maximum site hit count per interval"),
 
         AP_INIT_TAKE1("DOSPageInterval", get_page_interval, NULL, RSRC_CONF,
-		"Set page interval"),
+        "Set page interval"),
 
-	AP_INIT_TAKE1("DOSSiteInterval", get_site_interval, NULL, RSRC_CONF,
-		"Set site interval"),
+    AP_INIT_TAKE1("DOSSiteInterval", get_site_interval, NULL, RSRC_CONF,
+        "Set site interval"),
 
         AP_INIT_TAKE1("DOSBlockingPeriod", get_blocking_period, NULL, RSRC_CONF,
-		"Set blocking period for detected DoS IPs"),
+        "Set blocking period for detected DoS IPs"),
 
-	AP_INIT_TAKE1("DOSEmailNotify", get_email_notify, NULL, RSRC_CONF,
-		"Set email notification"),
+    AP_INIT_TAKE1("DOSEmailNotify", get_email_notify, NULL, RSRC_CONF,
+        "Set email notification"),
 
-	AP_INIT_TAKE1("DOSLogDir", get_log_dir, NULL, RSRC_CONF,
-		"Set log dir"),
+    AP_INIT_TAKE1("DOSLogDir", get_log_dir, NULL, RSRC_CONF,
+        "Set log dir"),
 
-	AP_INIT_TAKE1("DOSSystemCommand", get_system_command, NULL, RSRC_CONF,
-		"Set system command on DoS"),
+    AP_INIT_TAKE1("DOSSystemCommand", get_system_command, NULL, RSRC_CONF,
+        "Set system command on DoS"),
 
         AP_INIT_ITERATE("DOSWhitelist", whitelist, NULL, RSRC_CONF,
                 "IP-addresses wildcards to whitelist"),
 
-	{ NULL }
+    { NULL }
 };
 
 static void register_hooks(apr_pool_t *p) {
@@ -665,7 +665,7 @@ static void register_hooks(apr_pool_t *p) {
   apr_pool_cleanup_register(p, NULL, apr_pool_cleanup_null, destroy_hit_list);
 };
 
-module AP_MODULE_DECLARE_DATA evasive24_module =
+module AP_MODULE_DECLARE_DATA evasive_module =
 {
     STANDARD20_MODULE_STUFF,
     NULL,
